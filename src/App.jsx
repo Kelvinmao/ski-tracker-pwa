@@ -50,16 +50,22 @@ function App() {
               <button 
                 className="btn btn-secondary"
                 onClick={() => {
-                  fetch('/sample.kml')
-                    .then(res => res.text())
-                    .then(text => {
-                      const blob = new Blob([text], { type: 'application/vnd.google-earth.kml+xml' });
-                      const file = new File([blob], 'sample.kml', { type: 'application/vnd.google-earth.kml+xml' });
+                  fetch('/sample.kmz')
+                    .then(res => {
+                      if (!res.ok) throw new Error('File not found');
+                      return res.blob();
+                    })
+                    .then(blob => {
+                      const file = new File([blob], 'sample.kmz', { type: 'application/vnd.google-earth.kmz' });
                       handleFileUpload(file);
+                    })
+                    .catch(err => {
+                      console.error('Error loading sample:', err);
+                      alert('Sample file not available. Please upload your own KML/KMZ file.');
                     });
                 }}
               >
-                Load Sample Data
+                Load Sample Data (KMZ)
               </button>
             </div>
           </div>

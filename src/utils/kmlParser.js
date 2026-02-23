@@ -1,73 +1,50 @@
-export function parseKML(file) {
+import JSZip from 'jszip';
+
+export async function parseKML(file) {
+  const isKMZ = file.name.toLowerCase().endsWith('.kmz');
+  
+  if (isKMZ) {
+    return parseKMZ(file);
+  } else {
+    return parseKMLContent(file);
+  }
+}
+
+async function parseKMZ(file) {
+  try {
+    const zip = new JSZip();
+    const zipContent = await zip.loadAsync(file);
+    
+    let kmlFile = null;
+    let kmlFileName = null;
+    
+    for (const [filename, zipEntry] of Object.entries(zipContent.files)) {
+      if (filename.toLowerCase().endsWith('.kml') && !zipEntry.dir) {
+        kmlFile = zipEntry;
+        kmlFileName = filename;
+        break;
+      }
+    }
+    
+    if (!kmlFile) {
+      throw new Error('No KML file found in KMZ archive');
+    }
+    
+    const kmlContent = await kmlFile.async('string');
+    return parseKMLString(kmlContent);
+  } catch (error) {
+    console.error('Error parsing KMZ:', error);
+    throw error;
+  }
+}
+
+export function parseKMLContent(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
-        const parser = new DOMParser();
-        const xmlDoc = parser.parseFromString(e.target.result, 'text/xml');
-        const tracks = [];
-
-        const placemarks = xmlDoc.getElementsByTagName('Placemark');
-        
-        for (let i = 0; i < placemarks.length; i++) {
-          const placemark = placemarks[i];
-          const name = placemark.getElementsByTagName('name')[0]?.textContent;
-          const styleUrl = placemark.getElementsByTagName('styleUrl')[0]?.textContent;
-          
-          if (!name) continue;
-          
-          const type = styleUrl?.includes('LiftLine') ? 'lift' : 'run';
-          
-          const coords = [];
-          const timestamps = [];
-          const coordElements = placemark.getElementsByTagName('gx:coord');
-          const whenElements = placemark.getElementsByTagName('when');
-          
-          for (let j = 0; j < coordElements.length; j++) {
-            const coordText = coordElements[j].textContent.trim();
-            const [lon, lat] = coordText.split(' ').map(Number);
-            
-            if (!isNaN(lon) && !isNaN(lat)) {
-              coords.push([lat, lon]);
-              
-              if (whenElements[j]) {
-                const timeText = whenElements[j].textContent.trim();
-                const date = new Date(timeText);
-                if (!isNaN(date.getTime())) {
-                  timestamps.push(date);
-                }
-              }
-            }
-          }
-          
-          if (coords.length > 0) {
-            const distance = calculateDistance(coords);
-            const duration = timestamps.length > 1 ? 
-              (timestamps[timestamps.length - 1] - timestamps[0]) / 1000 : 0;
-            
-            const speeds = calculateSpeeds(coords, timestamps);
-            const avgSpeed = speeds.length > 0 ? 
-              speeds.reduce((a, b) => a + b, 0) / speeds.length : 0;
-            const maxSpeed = speeds.length > 0 ? Math.max(...speeds) : 0;
-            
-            tracks.push({
-              id: i,
-              name,
-              type,
-              coordinates: coords,
-              timestamps,
-              statistics: type === 'run' ? {
-                distance,
-                duration,
-                avgSpeed,
-                maxSpeed,
-                dataPoints: coords.length
-              } : null
-            });
-          }
-        }
-        
-        resolve(tracks);
+        const kmlContent = e.target.result;
+        parseKMLString(kmlContent).then(resolve).catch(reject);
       } catch (error) {
         reject(error);
       }
@@ -75,6 +52,78 @@ export function parseKML(file) {
     reader.onerror = reject;
     reader.readAsText(file);
   });
+}
+
+async function parseKMLString(kmlContent) {
+  try {
+    const parser = new DOMParser();
+    const xmlDoc = parser.parseFromString(kmlContent, 'text/xml');
+    const tracks = [];
+
+        const placemarks = xmlDoc.getElementsByTagName('Placemark');
+    
+    for (let i = 0; i < placemarks.length; i++) {
+      const placemark = placemarks[i];
+      const name = placemark.getElementsByTagName('name')[0]?.textContent;
+      const styleUrl = placemark.getElementsByTagName('styleUrl')[0]?.textContent;
+      
+      if (!name) continue;
+      
+      const type = styleUrl?.includes('LiftLine') ? 'lift' : 'run';
+      
+      const coords = [];
+      const timestamps = [];
+      const coordElements = placemark.getElementsByTagName('gx:coord');
+      const whenElements = placemark.getElementsByTagName('when');
+      
+      for (let j = 0; j < coordElements.length; j++) {
+        const coordText = coordElements[j].textContent.trim();
+        const [lon, lat] = coordText.split(' ').map(Number);
+        
+        if (!isNaN(lon) && !isNaN(lat)) {
+          coords.push([lat, lon]);
+          
+          if (whenElements[j]) {
+            const timeText = whenElements[j].textContent.trim();
+            const date = new Date(timeText);
+            if (!isNaN(date.getTime())) {
+              timestamps.push(date);
+            }
+          }
+        }
+      }
+      
+      if (coords.length > 0) {
+        const distance = calculateDistance(coords);
+        const duration = timestamps.length > 1 ? 
+          (timestamps[timestamps.length - 1] - timestamps[0]) / 1000 : 0;
+        
+        const speeds = calculateSpeeds(coords, timestamps);
+        const avgSpeed = speeds.length > 0 ? 
+          speeds.reduce((a, b) => a + b, 0) / speeds.length : 0;
+        const maxSpeed = speeds.length > 0 ? Math.max(...speeds) : 0;
+        
+        tracks.push({
+          id: i,
+          name,
+          type,
+          coordinates: coords,
+          timestamps,
+          statistics: type === 'run' ? {
+            distance,
+            duration,
+            avgSpeed,
+            maxSpeed,
+            dataPoints: coords.length
+          } : null
+        });
+      }
+    }
+    
+    return tracks;
+  } catch (error) {
+    throw error;
+  }
 }
 
 function calculateDistance(coords) {

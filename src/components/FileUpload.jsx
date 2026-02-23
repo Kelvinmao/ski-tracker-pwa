@@ -18,7 +18,7 @@ export default function FileUpload({ onFileUpload }) {
         style={{ display: 'none' }}
       />
       <label htmlFor="file-upload" className="btn btn-primary">
-        📁 Upload KML File
+        📁 Upload KML/KMZ File
       </label>
     </div>
   );
